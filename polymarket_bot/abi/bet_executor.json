@@ -1,0 +1,14 @@
+[
+  {
+    "inputs": [
+      {"internalType": "string", "name": "marketId", "type": "string"},
+      {"internalType": "string", "name": "outcome", "type": "string"},
+      {"internalType": "uint256", "name": "amountUSDC", "type": "uint256"},
+      {"internalType": "uint256", "name": "maxPriceBps", "type": "uint256"}
+    ],
+    "name": "placeBet",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
