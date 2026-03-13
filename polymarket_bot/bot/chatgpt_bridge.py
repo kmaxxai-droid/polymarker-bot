@@ -17,7 +17,15 @@ class ChatGPTBridge:
         return dedent(
             f"""
             Ты quantitative-аналитик прогнозных рынков.
-            Проанализируй список рынков Polymarket и выбери лучшие ставки.
+            Проанализируй рынки Polymarket и выбери лучшие ставки по двум стратегиям:
+            1) value_edge
+            2) high_probability
+
+            ВАЖНО:
+            - Используй current_yes_price как РЕАЛЬНУЮ рыночную цену покупки сейчас.
+            - Не используй hypothetical/потенциальные цены.
+            - Ставки только по событиям, где ends_at <= 14 дней.
+            - stake_usd должен быть <= 10.
 
             Данные рынков JSON:
             {json.dumps(payload, ensure_ascii=False, indent=2)}
@@ -31,6 +39,7 @@ class ChatGPTBridge:
                 "estimated_win_probability": 0.0,
                 "expected_value": 0.0,
                 "stake_usd": 0.0,
+                "max_entry_price": 0.0,
                 "reason": "короткое объяснение"
               }}
             ]
@@ -38,7 +47,8 @@ class ChatGPTBridge:
             - confidence от 0 до 1
             - estimated_win_probability от 0 до 1
             - expected_value > 0
-            - stake_usd в разумном диапазоне
+            - stake_usd от 1 до 10
+            - max_entry_price > 0 (реальная цена входа)
             """
         ).strip()
 
@@ -54,6 +64,7 @@ class ChatGPTBridge:
                     estimated_win_probability=float(item["estimated_win_probability"]),
                     expected_value=float(item["expected_value"]),
                     stake_usd=float(item["stake_usd"]),
+                    max_entry_price=float(item["max_entry_price"]),
                     reason=str(item.get("reason", "")),
                 )
             )

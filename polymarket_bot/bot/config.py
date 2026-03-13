@@ -22,6 +22,7 @@ class Settings:
     bet_min_usd: float
     bet_max_usd: float
     max_slippage_bps: int
+    max_event_horizon_days: int
     auto_mode: bool
     sqlite_path: Path
     bet_executor_contract: str
@@ -50,8 +51,9 @@ def load_settings() -> Settings:
         max_liquidity_usd=float(os.getenv("MAX_LIQUIDITY_USD", "1000")),
         min_edge=float(os.getenv("MIN_EDGE", "0.03")),
         bet_min_usd=float(os.getenv("BET_MIN_USD", "5")),
-        bet_max_usd=float(os.getenv("BET_MAX_USD", "25")),
+        bet_max_usd=float(os.getenv("BET_MAX_USD", "10")),
         max_slippage_bps=int(os.getenv("MAX_SLIPPAGE_BPS", "150")),
+        max_event_horizon_days=int(os.getenv("MAX_EVENT_HORIZON_DAYS", "14")),
         auto_mode=os.getenv("AUTO_MODE", "false").lower() == "true",
         sqlite_path=Path(os.getenv("SQLITE_PATH", "data/polymarket_bot.db")),
         bet_executor_contract=os.getenv("BET_EXECUTOR_CONTRACT", "0x0000000000000000000000000000000000000000"),

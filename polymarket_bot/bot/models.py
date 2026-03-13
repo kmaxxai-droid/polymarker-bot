@@ -15,6 +15,9 @@ class MarketCandidate:
     edge: float
     liquidity_usd: float
     volume_24h: float
+    ends_at: str
+    strategy: str
+    current_yes_price: float
 
 
 @dataclass(slots=True)
@@ -32,6 +35,7 @@ class AiRecommendation:
     estimated_win_probability: float
     expected_value: float
     stake_usd: float
+    max_entry_price: float
     reason: str
 
 

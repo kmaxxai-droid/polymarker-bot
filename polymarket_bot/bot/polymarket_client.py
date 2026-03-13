@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import httpx
 
 from .models import MarketCandidate
@@ -26,13 +28,14 @@ class PolymarketClient:
 
 
 class MarketScanner:
-    def __init__(self, min_edge: float, max_liquidity_usd: float) -> None:
+    def __init__(self, min_edge: float, max_liquidity_usd: float, max_event_horizon_days: int = 14) -> None:
         self.min_edge = min_edge
         self.max_liquidity_usd = max_liquidity_usd
+        self.max_event_horizon_days = max_event_horizon_days
+        self.high_prob_threshold = 0.75
 
     @staticmethod
     def _extract_probability(market: dict) -> float:
-        # lastTradePrice/noPrice/yesPrice форматы зависят от источника.
         for key in ("yesPrice", "probability", "lastTradePrice"):
             value = market.get(key)
             if value is not None:
@@ -41,12 +44,33 @@ class MarketScanner:
 
     @staticmethod
     def _expected_probability(market: dict) -> float:
-        # Простая эвристика: если объем высокий относительно ликвидности, вероятность недооценки чуть выше.
         liquidity = float(market.get("liquidity", 0) or 0)
         volume24 = float(market.get("volume24hr", 0) or 0)
         base = 0.5
         signal = min(0.2, volume24 / max(liquidity, 1.0) * 0.05)
         return min(0.95, max(0.05, base + signal))
+
+    @staticmethod
+    def _parse_end_at(market: dict) -> datetime | None:
+        raw = market.get("endDate") or market.get("endTime") or market.get("resolutionDate")
+        if not raw:
+            return None
+        try:
+            # Gamma обычно отдает ISO строку с Z.
+            return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    def _within_two_weeks(self, market: dict) -> tuple[bool, str]:
+        end_at = self._parse_end_at(market)
+        if not end_at:
+            return False, ""
+        now = datetime.now(timezone.utc)
+        if end_at < now:
+            return False, ""
+        if end_at > now + timedelta(days=self.max_event_horizon_days):
+            return False, ""
+        return True, end_at.isoformat()
 
     def select_candidates(self, raw_markets: list[dict], max_candidates: int, skip_market_ids: set[str]) -> list[MarketCandidate]:
         candidates: list[MarketCandidate] = []
@@ -55,29 +79,56 @@ class MarketScanner:
             if not market_id or market_id in skip_market_ids:
                 continue
 
+            in_window, ends_at = self._within_two_weeks(m)
+            if not in_window:
+                continue
+
             liquidity = float(m.get("liquidity", 0) or 0)
             if liquidity > self.max_liquidity_usd:
                 continue
 
-            p_market = self._extract_probability(m)
-            p_expected = self._expected_probability(m)
-            edge = p_expected - p_market
-            if edge < self.min_edge:
+            current_price = self._extract_probability(m)
+            expected_probability = self._expected_probability(m)
+            edge = expected_probability - current_price
+
+            # Стратегия 1: обычные недооцененные рынки (по edge).
+            if edge >= self.min_edge:
+                candidates.append(
+                    MarketCandidate(
+                        market_id=market_id,
+                        question=str(m.get("question", "Unknown market")),
+                        outcome="YES",
+                        market_url=str(m.get("url") or m.get("slug") or ""),
+                        probability=current_price,
+                        expected_probability=expected_probability,
+                        edge=edge,
+                        liquidity_usd=liquidity,
+                        volume_24h=float(m.get("volume24hr", 0) or 0),
+                        ends_at=ends_at,
+                        strategy="value_edge",
+                        current_yes_price=current_price,
+                    )
+                )
                 continue
 
-            candidates.append(
-                MarketCandidate(
-                    market_id=market_id,
-                    question=str(m.get("question", "Unknown market")),
-                    outcome="YES",
-                    market_url=str(m.get("url") or m.get("slug") or ""),
-                    probability=p_market,
-                    expected_probability=p_expected,
-                    edge=edge,
-                    liquidity_usd=liquidity,
-                    volume_24h=float(m.get("volume24hr", 0) or 0),
+            # Стратегия 2: высоковероятные события, но также с положительным edge.
+            if expected_probability >= self.high_prob_threshold and edge > 0:
+                candidates.append(
+                    MarketCandidate(
+                        market_id=market_id,
+                        question=str(m.get("question", "Unknown market")),
+                        outcome="YES",
+                        market_url=str(m.get("url") or m.get("slug") or ""),
+                        probability=current_price,
+                        expected_probability=expected_probability,
+                        edge=edge,
+                        liquidity_usd=liquidity,
+                        volume_24h=float(m.get("volume24hr", 0) or 0),
+                        ends_at=ends_at,
+                        strategy="high_probability",
+                        current_yes_price=current_price,
+                    )
                 )
-            )
 
-        candidates.sort(key=lambda x: x.edge, reverse=True)
+        candidates.sort(key=lambda x: (x.edge, x.expected_probability), reverse=True)
         return candidates[:max_candidates]

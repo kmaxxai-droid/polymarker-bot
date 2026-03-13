@@ -30,20 +30,18 @@ class PolymarketTrader:
         else:
             self.executor_contract = None
 
-    def _check_slippage(self, market_price: float, max_price: float) -> None:
-        slippage = (max_price - market_price) / max(market_price, 1e-9)
+    def _check_slippage(self, market_price: float, max_entry_price: float) -> None:
+        slippage = (market_price - max_entry_price) / max(max_entry_price, 1e-9)
         max_slippage = self.settings.max_slippage_bps / 10_000
         if slippage > max_slippage:
             raise ValueError(f"Slippage too high: {slippage:.4f} > {max_slippage:.4f}")
 
     def place_bet(self, recommendation: AiRecommendation, market_price: float) -> TradeResult:
-        # Ограничиваем размер ставки по risk-policy.
+        # Ограничиваем размер ставки по risk-policy (не дороже 10 USD по требованиям).
         amount = max(self.settings.bet_min_usd, min(recommendation.stake_usd, self.settings.bet_max_usd))
-        max_price = recommendation.estimated_win_probability
-        self._check_slippage(market_price, max_price)
+        self._check_slippage(market_price, recommendation.max_entry_price)
 
         if not self.executor_contract:
-            # Fallback dry-run: показывает, что прошло все проверки. Для реального продакшена задайте ABI и контракт.
             return TradeResult(
                 market_id=recommendation.market_id,
                 tx_hash="dry_run_no_executor_contract",
@@ -56,7 +54,7 @@ class PolymarketTrader:
             recommendation.market_id,
             recommendation.outcome,
             int(amount * 1_000_000),  # USDC 6 decimals
-            int(max_price * 10_000),
+            int(recommendation.max_entry_price * 10_000),
         ).build_transaction(
             {
                 "from": self.account.address,
