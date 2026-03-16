@@ -51,9 +51,22 @@ class PolymarketTelegramBot:
     async def on_scan(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         raw = self.client.fetch_active_markets(limit=400)
         scanned = self.storage.already_scanned_market_ids()
+        stats = self.scanner.collect_filter_stats(raw, scanned)
         candidates = self.scanner.select_candidates(raw, self.settings.max_candidates, scanned)
+        stats_text = (
+            "Статистика фильтров:\n"
+            f"- raw: {stats['total_raw']}\n"
+            f"- skipped scanned: {stats['skipped_already_scanned']}\n"
+            f"- fail horizon: {stats['failed_horizon']}\n"
+            f"- fail liquidity: {stats['failed_liquidity']}\n"
+            f"- fail probability bucket: {stats['failed_probability_bucket']}\n"
+            f"- fail edge: {stats['failed_edge']}\n"
+            f"- pass low_probability: {stats['passed_low_probability']}\n"
+            f"- pass high_probability: {stats['passed_high_probability']}\n"
+            f"- pass total: {stats['passed_total']}"
+        )
         if not candidates:
-            await update.message.reply_text("Не найдено новых кандидатов по фильтрам (<=14 дней).")
+            await update.message.reply_text("Не найдено новых кандидатов по фильтрам (<=14 дней).\n\n" + stats_text)
             return
 
         prompt = self.chatgpt.build_prompt(candidates)
@@ -66,6 +79,7 @@ class PolymarketTelegramBot:
         await update.message.reply_text(
             f"Найдено {len(candidates)} кандидатов (горизонт до 14 дней).\n"
             f"Scan ID: {scan_id}\n\n"
+            f"{stats_text}\n\n"
             "Скопируй prompt ниже в ChatGPT и пришли JSON-ответ сюда одним сообщением:\n\n"
             f"```\n{prompt}\n```",
             parse_mode="Markdown",

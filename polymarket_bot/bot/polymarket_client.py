@@ -80,6 +80,59 @@ class MarketScanner:
             return False, ""
         return True, end_at.isoformat()
 
+    def collect_filter_stats(self, raw_markets: list[dict], skip_market_ids: set[str]) -> dict[str, int]:
+        stats = {
+            "total_raw": len(raw_markets),
+            "skipped_already_scanned": 0,
+            "failed_horizon": 0,
+            "failed_liquidity": 0,
+            "failed_probability_bucket": 0,
+            "failed_edge": 0,
+            "passed_low_probability": 0,
+            "passed_high_probability": 0,
+            "passed_total": 0,
+        }
+
+        for m in raw_markets:
+            market_id = str(m.get("id") or m.get("conditionId") or "")
+            if not market_id or market_id in skip_market_ids:
+                stats["skipped_already_scanned"] += 1
+                continue
+
+            in_window, _ = self._within_two_weeks(m)
+            if not in_window:
+                stats["failed_horizon"] += 1
+                continue
+
+            liquidity = float(m.get("liquidity", 0) or 0)
+            if liquidity > self.max_liquidity_usd:
+                stats["failed_liquidity"] += 1
+                continue
+
+            current_price = self._extract_probability(m)
+            expected_probability = self._expected_probability(m)
+            edge = expected_probability - current_price
+
+            in_low_bucket = current_price <= self.low_prob_threshold
+            in_high_bucket = current_price >= self.high_prob_threshold
+            if not in_low_bucket and not in_high_bucket:
+                stats["failed_probability_bucket"] += 1
+                continue
+
+            if in_low_bucket and edge >= self.min_edge_low_prob:
+                stats["passed_low_probability"] += 1
+                stats["passed_total"] += 1
+                continue
+
+            if in_high_bucket and edge >= self.min_edge_high_prob:
+                stats["passed_high_probability"] += 1
+                stats["passed_total"] += 1
+                continue
+
+            stats["failed_edge"] += 1
+
+        return stats
+
     def select_candidates(self, raw_markets: list[dict], max_candidates: int, skip_market_ids: set[str]) -> list[MarketCandidate]:
         candidates: list[MarketCandidate] = []
         for m in raw_markets:
