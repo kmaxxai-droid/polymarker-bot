@@ -18,7 +18,10 @@ class Settings:
     polymarket_gamma_url: str
     max_candidates: int
     max_liquidity_usd: float
-    min_edge: float
+    min_edge_low_prob: float
+    min_edge_high_prob: float
+    low_prob_threshold: float
+    high_prob_threshold: float
     bet_min_usd: float
     bet_max_usd: float
     max_slippage_bps: int
@@ -27,7 +30,6 @@ class Settings:
     sqlite_path: Path
     bet_executor_contract: str
     bet_executor_abi_path: Path
-
 
 
 def _must(name: str) -> str:
@@ -49,7 +51,10 @@ def load_settings() -> Settings:
         polymarket_gamma_url=os.getenv("POLYMARKET_GAMMA_URL", "https://gamma-api.polymarket.com"),
         max_candidates=int(os.getenv("MAX_CANDIDATES", "30")),
         max_liquidity_usd=float(os.getenv("MAX_LIQUIDITY_USD", "1000")),
-        min_edge=float(os.getenv("MIN_EDGE", "0.03")),
+        min_edge_low_prob=float(os.getenv("MIN_EDGE_LOW_PROB", "0.01")),
+        min_edge_high_prob=float(os.getenv("MIN_EDGE_HIGH_PROB", "0.01")),
+        low_prob_threshold=float(os.getenv("LOW_PROB_THRESHOLD", "0.20")),
+        high_prob_threshold=float(os.getenv("HIGH_PROB_THRESHOLD", "0.80")),
         bet_min_usd=float(os.getenv("BET_MIN_USD", "5")),
         bet_max_usd=float(os.getenv("BET_MAX_USD", "10")),
         max_slippage_bps=int(os.getenv("MAX_SLIPPAGE_BPS", "150")),

@@ -13,9 +13,12 @@ def main() -> None:
     storage = BotStorage(settings.sqlite_path)
     client = PolymarketClient(settings.polymarket_gamma_url)
     scanner = MarketScanner(
-        min_edge=settings.min_edge,
+        min_edge_low_prob=settings.min_edge_low_prob,
+        min_edge_high_prob=settings.min_edge_high_prob,
         max_liquidity_usd=settings.max_liquidity_usd,
         max_event_horizon_days=settings.max_event_horizon_days,
+        low_prob_threshold=settings.low_prob_threshold,
+        high_prob_threshold=settings.high_prob_threshold,
     )
     chatgpt = ChatGPTBridge()
     trader = PolymarketTrader(settings)

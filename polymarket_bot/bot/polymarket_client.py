@@ -13,7 +13,6 @@ class PolymarketClient:
         self.client = httpx.Client(timeout=timeout)
 
     def fetch_active_markets(self, limit: int = 200) -> list[dict]:
-        # Endpoint Gamma API; можно заменить на Subgraph при необходимости.
         response = self.client.get(
             f"{self.gamma_url}/markets",
             params={"active": "true", "closed": "false", "limit": str(limit), "order": "volume24hr", "ascending": "false"},
@@ -28,11 +27,21 @@ class PolymarketClient:
 
 
 class MarketScanner:
-    def __init__(self, min_edge: float, max_liquidity_usd: float, max_event_horizon_days: int = 14) -> None:
-        self.min_edge = min_edge
+    def __init__(
+        self,
+        min_edge_low_prob: float,
+        min_edge_high_prob: float,
+        max_liquidity_usd: float,
+        max_event_horizon_days: int = 14,
+        low_prob_threshold: float = 0.20,
+        high_prob_threshold: float = 0.80,
+    ) -> None:
+        self.min_edge_low_prob = min_edge_low_prob
+        self.min_edge_high_prob = min_edge_high_prob
         self.max_liquidity_usd = max_liquidity_usd
         self.max_event_horizon_days = max_event_horizon_days
-        self.high_prob_threshold = 0.75
+        self.low_prob_threshold = low_prob_threshold
+        self.high_prob_threshold = high_prob_threshold
 
     @staticmethod
     def _extract_probability(market: dict) -> float:
@@ -56,7 +65,6 @@ class MarketScanner:
         if not raw:
             return None
         try:
-            # Gamma обычно отдает ISO строку с Z.
             return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
         except ValueError:
             return None
@@ -91,8 +99,8 @@ class MarketScanner:
             expected_probability = self._expected_probability(m)
             edge = expected_probability - current_price
 
-            # Стратегия 1: обычные недооцененные рынки (по edge).
-            if edge >= self.min_edge:
+            # Стратегия 1: низкая рыночная вероятность (<= 0.2) + отдельный edge.
+            if current_price <= self.low_prob_threshold and edge >= self.min_edge_low_prob:
                 candidates.append(
                     MarketCandidate(
                         market_id=market_id,
@@ -105,14 +113,14 @@ class MarketScanner:
                         liquidity_usd=liquidity,
                         volume_24h=float(m.get("volume24hr", 0) or 0),
                         ends_at=ends_at,
-                        strategy="value_edge",
+                        strategy="low_probability",
                         current_yes_price=current_price,
                     )
                 )
                 continue
 
-            # Стратегия 2: высоковероятные события, но также с положительным edge.
-            if expected_probability >= self.high_prob_threshold and edge > 0:
+            # Стратегия 2: высокая рыночная вероятность (>= 0.8) + отдельный edge.
+            if current_price >= self.high_prob_threshold and edge >= self.min_edge_high_prob:
                 candidates.append(
                     MarketCandidate(
                         market_id=market_id,
