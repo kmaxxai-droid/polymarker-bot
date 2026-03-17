@@ -81,10 +81,25 @@ class PolymarketTelegramBot:
             f"Найдено {len(candidates)} кандидатов (горизонт до 14 дней).\n"
             f"Scan ID: {scan_id}\n\n"
             f"{stats_text}\n\n"
-            "Скопируй prompt ниже в ChatGPT и пришли JSON-ответ сюда одним сообщением:\n\n"
-            f"```\n{prompt}\n```",
-            parse_mode="Markdown",
+            "Сейчас отправлю prompt частями (Telegram ограничивает длину сообщения). "
+            "Скопируй все части подряд и отправь в ChatGPT.",
         )
+
+        for idx, chunk in enumerate(self._chunk_text(prompt), start=1):
+            await update.message.reply_text(f"[PROMPT PART {idx}]\n{chunk}")
+
+
+    @staticmethod
+    def _chunk_text(text: str, max_len: int = 3500) -> list[str]:
+        if len(text) <= max_len:
+            return [text]
+        chunks: list[str] = []
+        start = 0
+        while start < len(text):
+            end = min(start + max_len, len(text))
+            chunks.append(text[start:end])
+            start = end
+        return chunks
 
     async def on_auto(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not context.args:
