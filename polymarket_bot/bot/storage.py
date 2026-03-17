@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,7 +60,7 @@ class BotStorage:
         for m in markets:
             self.conn.execute(
                 "INSERT OR REPLACE INTO scan_markets(scan_id, market_id, payload) VALUES(?, ?, ?)",
-                (scan_id, m.market_id, json.dumps(m.__dict__, ensure_ascii=False)),
+                (scan_id, m.market_id, json.dumps(asdict(m), ensure_ascii=False)),
             )
         self.conn.commit()
 
@@ -71,7 +72,7 @@ class BotStorage:
         for rec in recs:
             self.conn.execute(
                 "INSERT OR REPLACE INTO recommendations(scan_id, market_id, payload) VALUES(?, ?, ?)",
-                (scan_id, rec.market_id, json.dumps(rec.__dict__, ensure_ascii=False)),
+                (scan_id, rec.market_id, json.dumps(asdict(rec), ensure_ascii=False)),
             )
         self.conn.commit()
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -155,6 +156,6 @@ class PolymarketTelegramBot:
         for rec in recs:
             market_price = float(market_prices.get(rec.market_id, rec.max_entry_price))
             trade = self.trader.place_bet(rec, market_price=market_price)
-            self.storage.save_trade(rec.market_id, trade.tx_hash, trade.__dict__)
+            self.storage.save_trade(rec.market_id, trade.tx_hash, asdict(trade))
             rows.append(f"{rec.market_id}: {trade.status} ({trade.tx_hash}), market_price={market_price:.3f}")
         return "\n".join(rows)

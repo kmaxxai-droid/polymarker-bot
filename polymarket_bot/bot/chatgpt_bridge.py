@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from textwrap import dedent
 
 from .models import AiRecommendation, MarketCandidate
@@ -13,7 +14,7 @@ class ChatGPTBridge:
     """
 
     def build_prompt(self, markets: list[MarketCandidate]) -> str:
-        payload = [m.__dict__ for m in markets]
+        payload = [asdict(m) for m in markets]
         return dedent(
             f"""
             Ты quantitative-аналитик прогнозных рынков.
