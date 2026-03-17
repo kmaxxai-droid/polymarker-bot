@@ -17,7 +17,7 @@ class Settings:
     chain_id: int
     polymarket_gamma_url: str
     max_candidates: int
-    max_liquidity_usd: float
+    scan_fetch_limit: int
     min_edge_low_prob: float
     min_edge_high_prob: float
     low_prob_threshold: float
@@ -50,7 +50,7 @@ def load_settings() -> Settings:
         chain_id=int(os.getenv("CHAIN_ID", "137")),
         polymarket_gamma_url=os.getenv("POLYMARKET_GAMMA_URL", "https://gamma-api.polymarket.com"),
         max_candidates=int(os.getenv("MAX_CANDIDATES", "30")),
-        max_liquidity_usd=float(os.getenv("MAX_LIQUIDITY_USD", "1000")),
+        scan_fetch_limit=int(os.getenv("SCAN_FETCH_LIMIT", "10000")),
         min_edge_low_prob=float(os.getenv("MIN_EDGE_LOW_PROB", "0.01")),
         min_edge_high_prob=float(os.getenv("MIN_EDGE_HIGH_PROB", "0.01")),
         low_prob_threshold=float(os.getenv("LOW_PROB_THRESHOLD", "0.20")),

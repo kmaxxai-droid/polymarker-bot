@@ -50,7 +50,7 @@ class PolymarketTelegramBot:
         )
 
     async def on_scan(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        raw = self.client.fetch_active_markets(limit=400)
+        raw = self.client.fetch_active_markets(limit=self.settings.scan_fetch_limit)
         scanned = self.storage.already_scanned_market_ids()
         stats = self.scanner.collect_filter_stats(raw, scanned)
         candidates = self.scanner.select_candidates(raw, self.settings.max_candidates, scanned)

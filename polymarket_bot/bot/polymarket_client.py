@@ -12,18 +12,35 @@ class PolymarketClient:
         self.gamma_url = gamma_url.rstrip("/")
         self.client = httpx.Client(timeout=timeout)
 
-    def fetch_active_markets(self, limit: int = 200) -> list[dict]:
-        response = self.client.get(
-            f"{self.gamma_url}/markets",
-            params={"active": "true", "closed": "false", "limit": str(limit), "order": "volume24hr", "ascending": "false"},
-        )
-        response.raise_for_status()
-        data = response.json()
-        if isinstance(data, dict) and "data" in data:
-            return data["data"]
-        if isinstance(data, list):
-            return data
-        return []
+    def fetch_active_markets(self, limit: int = 200, page_size: int = 500) -> list[dict]:
+        """
+        Загружает рынки батчами через offset, чтобы можно было забрать >500.
+        """
+        all_markets: list[dict] = []
+        offset = 0
+        while len(all_markets) < limit:
+            current_limit = min(page_size, limit - len(all_markets))
+            response = self.client.get(
+                f"{self.gamma_url}/markets",
+                params={
+                    "active": "true",
+                    "closed": "false",
+                    "limit": str(current_limit),
+                    "offset": str(offset),
+                    "order": "volume24hr",
+                    "ascending": "false",
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            batch = data.get("data", []) if isinstance(data, dict) else data if isinstance(data, list) else []
+            if not batch:
+                break
+            all_markets.extend(batch)
+            if len(batch) < current_limit:
+                break
+            offset += current_limit
+        return all_markets
 
 
 class MarketScanner:
@@ -31,14 +48,12 @@ class MarketScanner:
         self,
         min_edge_low_prob: float,
         min_edge_high_prob: float,
-        max_liquidity_usd: float,
         max_event_horizon_days: int = 14,
         low_prob_threshold: float = 0.20,
         high_prob_threshold: float = 0.80,
     ) -> None:
         self.min_edge_low_prob = min_edge_low_prob
         self.min_edge_high_prob = min_edge_high_prob
-        self.max_liquidity_usd = max_liquidity_usd
         self.max_event_horizon_days = max_event_horizon_days
         self.low_prob_threshold = low_prob_threshold
         self.high_prob_threshold = high_prob_threshold
@@ -104,11 +119,6 @@ class MarketScanner:
                 stats["failed_horizon"] += 1
                 continue
 
-            liquidity = float(m.get("liquidity", 0) or 0)
-            if liquidity > self.max_liquidity_usd:
-                stats["failed_liquidity"] += 1
-                continue
-
             current_price = self._extract_probability(m)
             expected_probability = self._expected_probability(m)
             edge = expected_probability - current_price
@@ -144,15 +154,11 @@ class MarketScanner:
             if not in_window:
                 continue
 
-            liquidity = float(m.get("liquidity", 0) or 0)
-            if liquidity > self.max_liquidity_usd:
-                continue
-
             current_price = self._extract_probability(m)
             expected_probability = self._expected_probability(m)
             edge = expected_probability - current_price
+            liquidity = float(m.get("liquidity", 0) or 0)
 
-            # Стратегия 1: низкая рыночная вероятность (<= 0.2) + отдельный edge.
             if current_price <= self.low_prob_threshold and edge >= self.min_edge_low_prob:
                 candidates.append(
                     MarketCandidate(
@@ -172,7 +178,6 @@ class MarketScanner:
                 )
                 continue
 
-            # Стратегия 2: высокая рыночная вероятность (>= 0.8) + отдельный edge.
             if current_price >= self.high_prob_threshold and edge >= self.min_edge_high_prob:
                 candidates.append(
                     MarketCandidate(
